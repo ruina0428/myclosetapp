@@ -63,6 +63,7 @@ for cate in categories:
 st.markdown('<div class="floating-btn" onclick="document.getElementById(\'upload-btn\').click()">+</div>', unsafe_allow_html=True)
 
 # ---------------------- 照片上传功能（手机端核心） ----------------------
+# ---------------------- 照片上传功能（修复重复上传问题） ----------------------
 with st.expander("📸 上传新衣物（手机点这里选相册）", expanded=False):
     # 1. 选择分类
     selected_cate = st.selectbox("选择衣物分类", categories, key="upload-cate")
@@ -71,21 +72,25 @@ with st.expander("📸 上传新衣物（手机点这里选相册）", expanded=
         "从手机相册选择照片",
         type=["jpg", "jpeg", "png"],
         key="upload-btn",
-        label_visibility="collapsed"  # 隐藏重复标签
+        label_visibility="collapsed"
     )
-    # 3. 保存上传的照片
+    # 3. 保存上传的照片（添加防重复逻辑）
     if uploaded_file is not None:
-        # 生成唯一文件名，避免重复
-        file_name = f"{uuid.uuid4()}.{uploaded_file.name.split('.')[-1]}"
+        # 生成唯一文件名，用图片的哈希值来避免重复
+        import hashlib
+        file_hash = hashlib.md5(uploaded_file.getbuffer()).hexdigest()
+        file_name = f"{file_hash}.{uploaded_file.name.split('.')[-1]}"
         file_path = os.path.join(selected_cate, file_name)
         
-        # 保存图片到对应分类文件夹
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        
-        st.success(f"✅ {selected_cate}上传成功！")
-        # 刷新页面（让新上传的图片显示出来）
-        st.rerun()
+        # 只有当文件不存在时才保存
+        if not os.path.exists(file_path):
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.success(f"✅ {selected_cate}上传成功！")
+        else:
+            st.info(f"ℹ️ 该图片已存在，无需重复上传")
+        # 不再用st.rerun，改用Streamlit的状态管理刷新
+        st.session_state["upload_trigger"] = not st.session_state.get("upload_trigger", False)
 
 # ---------------------- 按分类展示衣物（手机端横向滚动） ----------------------
 st.title("👗 我的衣橱")
@@ -111,4 +116,5 @@ for cate in categories:
     else:
         # 空分类提示
         st.write("暂无衣物，点击上方「上传新衣物」添加～")
+
     st.divider()  # 分类之间加分隔线，手机上更清晰
